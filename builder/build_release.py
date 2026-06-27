@@ -263,7 +263,7 @@ def extract_zip(zip_path, target_home):
         for i, m in enumerate(members):
             if m.is_dir():
                 continue
-            name = m.filename.replace("\\", "/")
+            name = m.filename.replace("\\\\", "/")
             if name.startswith("/") or ".." in name.split("/"):
                 continue
             target = os.path.join(target_home, *name.split("/"))
@@ -293,7 +293,7 @@ def install_build():
         if idx < 0:
             return
         b = builds[idx]
-        msg = "להתקין את:\n%s\n\nמומלץ לגבות לפני התקנה. כל משתמש יגדיר Real-Debrid בעצמו." % labels[idx]
+        msg = "להתקין את:\\n%s\\n\\nמומלץ לגבות לפני התקנה. כל משתמש יגדיר Real-Debrid בעצמו." % labels[idx]
         if not dlg.yesno("Lior Wizard", msg):
             return
         packages = t("special://home/addons/packages")
@@ -338,7 +338,7 @@ def show_info():
         lines = ["Kodi: " + xbmc.getInfoLabel("System.BuildVersion"), "כתובת: " + BASE_URL]
         for b in builds:
             lines.append("%s - %s" % (b.get("name", "Build"), b.get("version", "")))
-        xbmcgui.Dialog().ok("Lior Wizard", "\n".join(lines))
+        xbmcgui.Dialog().ok("Lior Wizard", "\\n".join(lines))
     except Exception as e:
         xbmcgui.Dialog().ok("Lior Wizard - שגיאה", str(e))
 

@@ -1,8 +1,22 @@
-# LiorKodiBuilder v1.3
+# LiorKodiBuilder v1.4
 
-תיקון: מבנה datadir תקני של Kodi.
+תיקון: שגיאת תחביר ב-Wizard (`default.py`).
 
-ה-ZIP של ה-Wizard נוצר עכשיו גם בנתיב:
-`repo/plugin.program.liorwizard/plugin.program.liorwizard-VERSION.zip`
+מה תוקן:
+- תיקון `replace("\\\\", "/")` בקוד החילוץ.
+- תיקון שורות טקסט עם `\n` שגרמו ל-SyntaxError.
+- בוצעה בדיקת תחביר מקומית ל-`default.py` שנוצר מתוך ה-ZIP.
 
-זה הנתיב שקודי ביקש לפי הלוג.
+הרצה מומלצת:
+
+```cmd
+python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.7 --name "Lior Build"
+```
+
+לאחר מכן להעלות את תוכן:
+
+```text
+output\UPLOAD_TO_KODIBUILD_ROOT
+```
+
+למאגר `KodiBuild`.

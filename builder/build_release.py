@@ -37,6 +37,17 @@ SECRET_PATTERNS = [
 ]
 
 
+
+ICON_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010806000000"
+    "1f15c4890000000a49444154789c6360000002000100"
+    "05fe02fea5579a0000000049454e44ae426082"
+)
+
+def write_binary(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+
 def md5_file(path: Path) -> str:
     h = hashlib.md5()
     with path.open("rb") as f:
@@ -190,25 +201,40 @@ def wizard_default_py(base_url: str) -> str:
     return f'''# -*- coding: utf-8 -*-
 import json
 import os
+import shutil
+import sys
 import urllib.request
 import zipfile
 
 import xbmc
 import xbmcaddon
 import xbmcgui
+import xbmcplugin
 import xbmcvfs
 
 BASE_URL = "{base_url.rstrip('/')}/"
 BUILDS_JSON = BASE_URL + "builds.json"
+ADDON = xbmcaddon.Addon()
+HANDLE = int(sys.argv[1]) if len(sys.argv) > 1 else -1
 
 
 def t(path):
     return xbmcvfs.translatePath(path)
 
 
+def notify(message):
+    xbmcgui.Dialog().notification("Lior Wizard", message, xbmcgui.NOTIFICATION_INFO, 4000)
+
+
+def fetch_builds():
+    req = urllib.request.Request(BUILDS_JSON, headers={{"User-Agent": "LiorKodiWizard/1.0"}})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
 def download(url, dest):
     req = urllib.request.Request(url, headers={{"User-Agent": "LiorKodiWizard/1.0"}})
-    with urllib.request.urlopen(req, timeout=60) as r, open(dest, "wb") as f:
+    with urllib.request.urlopen(req, timeout=90) as r, open(dest, "wb") as f:
         total = r.headers.get("Content-Length")
         total = int(total) if total else 0
         done = 0
@@ -221,65 +247,123 @@ def download(url, dest):
             f.write(chunk)
             done += len(chunk)
             if total:
-                dp.update(int(done * 100 / total))
+                dp.update(int(done * 100 / total), "מוריד... %d%%" % int(done * 100 / total))
             if dp.iscanceled():
+                dp.close()
                 raise Exception("ההורדה בוטלה")
         dp.close()
 
 
-def install_build(zip_path):
-    home = PathLike(t("special://home"))
+def extract_zip(zip_path, target_home):
     dp = xbmcgui.DialogProgress()
     dp.create("Lior Build", "מתקין Build...")
     with zipfile.ZipFile(zip_path, "r") as zf:
         members = zf.infolist()
+        total = max(1, len(members))
         for i, m in enumerate(members):
             if m.is_dir():
                 continue
-            target = os.path.join(home, m.filename.replace("/", os.sep))
+            name = m.filename.replace("\\", "/")
+            if name.startswith("/") or ".." in name.split("/"):
+                continue
+            target = os.path.join(target_home, *name.split("/"))
             os.makedirs(os.path.dirname(target), exist_ok=True)
             with zf.open(m) as src, open(target, "wb") as dst:
-                dst.write(src.read())
-            if i % 20 == 0:
-                dp.update(int(i * 100 / max(1, len(members))))
+                shutil.copyfileobj(src, dst)
+            if i % 25 == 0:
+                dp.update(int(i * 100 / total), "מתקין... %d%%" % int(i * 100 / total))
             if dp.iscanceled():
+                dp.close()
                 raise Exception("ההתקנה בוטלה")
     dp.close()
 
 
-def PathLike(s):
-    return s
-
-
-def main():
+def install_build():
     dlg = xbmcgui.Dialog()
     try:
-        with urllib.request.urlopen(BUILDS_JSON, timeout=30) as r:
-            data = json.loads(r.read().decode("utf-8"))
+        data = fetch_builds()
         builds = data.get("builds", [])
         if not builds:
-            dlg.ok("Lior Build", "לא נמצאו Builds")
+            dlg.ok("Lior Wizard", "לא נמצאו Builds בקובץ builds.json")
             return
-        labels = [b.get("name", "Build") + " " + b.get("version", "") for b in builds]
+        labels = []
+        for b in builds:
+            labels.append("%s  |  גרסה %s  |  Kodi %s" % (b.get("name", "Build"), b.get("version", ""), b.get("kodi", "")))
         idx = dlg.select("בחר Build להתקנה", labels)
         if idx < 0:
             return
         b = builds[idx]
-        if not dlg.yesno("Lior Build", "להתקין את " + labels[idx] + "?", "מומלץ לגבות את Kodi לפני התקנה."):
+        msg = "להתקין את:\n%s\n\nמומלץ לגבות לפני התקנה. כל משתמש יגדיר Real-Debrid בעצמו." % labels[idx]
+        if not dlg.yesno("Lior Wizard", msg):
             return
         packages = t("special://home/addons/packages")
         os.makedirs(packages, exist_ok=True)
         dest = os.path.join(packages, os.path.basename(b["url"]))
         download(b["url"], dest)
-        install_build(dest)
-        dlg.ok("Lior Build", "ההתקנה הסתיימה. סגור ופתח את Kodi מחדש.")
+        extract_zip(dest, t("special://home"))
+        xbmc.executebuiltin("UpdateLocalAddons")
+        xbmc.executebuiltin("UpdateAddonRepos")
+        dlg.ok("Lior Wizard", "ה-Build הותקן. סגור ופתח את Kodi מחדש.")
     except Exception as e:
-        dlg.ok("Lior Build - שגיאה", str(e))
+        dlg.ok("Lior Wizard - שגיאה", str(e))
+
+
+def clear_cache():
+    paths = [
+        "special://home/cache",
+        "special://temp",
+        "special://home/addons/packages",
+    ]
+    removed = 0
+    for p in paths:
+        real = t(p)
+        if os.path.exists(real):
+            for name in os.listdir(real):
+                fp = os.path.join(real, name)
+                try:
+                    if os.path.isdir(fp):
+                        shutil.rmtree(fp, ignore_errors=True)
+                    else:
+                        os.remove(fp)
+                    removed += 1
+                except Exception:
+                    pass
+    xbmcgui.Dialog().ok("Lior Wizard", "ניקוי הסתיים. נמחקו %d פריטים." % removed)
+
+
+def show_info():
+    try:
+        data = fetch_builds()
+        builds = data.get("builds", [])
+        lines = ["Kodi: " + xbmc.getInfoLabel("System.BuildVersion"), "כתובת: " + BASE_URL]
+        for b in builds:
+            lines.append("%s - %s" % (b.get("name", "Build"), b.get("version", "")))
+        xbmcgui.Dialog().ok("Lior Wizard", "\n".join(lines))
+    except Exception as e:
+        xbmcgui.Dialog().ok("Lior Wizard - שגיאה", str(e))
+
+
+def main():
+    while True:
+        choice = xbmcgui.Dialog().select("Lior Wizard", [
+            "התקנת Lior Build",
+            "מידע על גרסאות",
+            "ניקוי Cache / Packages",
+            "יציאה",
+        ])
+        if choice == 0:
+            install_build()
+        elif choice == 1:
+            show_info()
+        elif choice == 2:
+            clear_cache()
+        else:
+            break
+
 
 if __name__ == "__main__":
     main()
 '''
-
 
 def make_addon_zip(folder: Path, zip_path: Path) -> None:
     zip_path.parent.mkdir(parents=True, exist_ok=True)
@@ -331,7 +415,7 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         repo_addon_dir = work / DEFAULT_REPO_ID
         repo_addon_dir.mkdir()
         write_text(repo_addon_dir / "addon.xml", addon_xml_repo(base_url, DEFAULT_REPO_ID, version))
-        write_text(repo_addon_dir / "icon.png", "")
+        write_binary(repo_addon_dir / "icon.png", ICON_PNG)
         repo_zip_name = f"{DEFAULT_REPO_ID}-{version}.zip"
         if not dry_run:
             make_addon_zip(repo_addon_dir, repo_dir / repo_zip_name)
@@ -341,6 +425,7 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         wiz_dir.mkdir()
         write_text(wiz_dir / "addon.xml", addon_xml_wizard(DEFAULT_WIZARD_ID, version))
         write_text(wiz_dir / "default.py", wizard_default_py(base_url))
+        write_binary(wiz_dir / "icon.png", ICON_PNG)
         wiz_zip_name = f"{DEFAULT_WIZARD_ID}-{version}.zip"
         if not dry_run:
             make_addon_zip(wiz_dir, repo_dir / wiz_zip_name)

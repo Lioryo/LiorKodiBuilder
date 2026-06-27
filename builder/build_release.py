@@ -364,15 +364,41 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         write_text(upload / "addons.xml", addons_xml)
         write_text(upload / "addons.xml.md5", hashlib.md5(addons_xml.encode("utf-8")).hexdigest())
 
-        index = f'''<!doctype html><html lang="he" dir="rtl"><meta charset="utf-8"><title>Lior Kodi Build</title>
+        # GitHub Pages does not provide directory listing. Kodi's HTTP browser parses
+        # links from index.html, so we create explicit links to every installable ZIP.
+        root_index = f'''<!doctype html>
+<html lang="he" dir="rtl">
+<meta charset="utf-8">
+<title>Lior Kodi Build</title>
 <h1>Lior Kodi Build</h1>
 <p>כתובת מקור לקודי: <code>{base_url}</code></p>
+<h2>התקנה</h2>
 <ul>
-<li><a href="{DEFAULT_REPO_ID}.zip">התקנת Repository</a></li>
-<li><a href="addons.xml">addons.xml</a></li>
-<li><a href="builds.json">builds.json</a></li>
-</ul></html>'''
-        write_text(upload / "index.html", index)
+  <li><a href="{DEFAULT_REPO_ID}.zip">repository.lior.zip</a></li>
+  <li><a href="repo/{repo_zip_name}">{repo_zip_name}</a></li>
+  <li><a href="repo/{wiz_zip_name}">{wiz_zip_name}</a></li>
+</ul>
+<h2>קבצי עדכון</h2>
+<ul>
+  <li><a href="addons.xml">addons.xml</a></li>
+  <li><a href="addons.xml.md5">addons.xml.md5</a></li>
+  <li><a href="builds.json">builds.json</a></li>
+  <li><a href="builds/{build_zip_name}">{build_zip_name}</a></li>
+</ul>
+</html>'''
+        write_text(upload / "index.html", root_index)
+
+        repo_index = f'''<!doctype html>
+<html lang="he" dir="rtl">
+<meta charset="utf-8">
+<title>Lior Kodi Repo</title>
+<h1>Lior Kodi Repo</h1>
+<ul>
+  <li><a href="{repo_zip_name}">{repo_zip_name}</a></li>
+  <li><a href="{wiz_zip_name}">{wiz_zip_name}</a></li>
+</ul>
+</html>'''
+        write_text(repo_dir / "index.html", repo_index)
 
         inv = f'''# דוח יצירת Build
 

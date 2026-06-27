@@ -1,18 +1,25 @@
-# LiorKodiBuilder v0.6
+# LiorKodiBuilder v0.7
 
-גרסה זו מייצרת חבילת הפצה אמיתית יותר ל-KodiBuild:
-
-- Build ZIP מתוך גיבוי Kodi
-- repository.lior.zip להתקנה ידנית מתוך Kodi
-- plugin.program.liorwizard בתוך repo/
-- addons.xml + addons.xml.md5
-- builds.json
-- index.html
+גרסה זו מתקנת את בעיית GitHub Pages/Kodi: GitHub לא מציג רשימת תיקיות אוטומטית, לכן הכלי יוצר `index.html` בשורש וגם בתוך `repo/` עם קישורים מפורשים לקבצי ה-ZIP.
 
 פקודה לדוגמה:
 
 ```cmd
-python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.0 --name "Lior Build"
+python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.1 --name "Lior Build"
 ```
 
-את התוכן של `output\UPLOAD_TO_KODIBUILD_ROOT` מעלים לשורש המאגר KodiBuild.
+אחרי ההרצה מעלים את כל התוכן של:
+
+```text
+output\UPLOAD_TO_KODIBUILD_ROOT
+```
+
+לשורש המאגר `KodiBuild`.
+
+בקודי מוסיפים מקור:
+
+```text
+https://lioryo.github.io/KodiBuild/
+```
+
+ואז: Add-ons → Install from zip file → המקור → `repository.lior.zip`.

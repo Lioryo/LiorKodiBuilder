@@ -1,23 +1,18 @@
 # מפת דרכים
 
-## v0.2
-- בדיקת תיקיית Kodi
-- דוח בסיסי
-
-## v0.3
-- ניקוי Cache, logs, packages, thumbnails
+## v0.3 - נוכחי
+- ניקוי Build
+- הסרת מידע אישי נפוץ
+- יצירת Build.zip
+- יצירת builds.json
+- יצירת תיקיית העלאה ל-GitHub Pages
 
 ## v0.4
-- הסרת חשבונות אישיים: Real-Debrid, Trakt, YouTube OAuth
+- יצירת Repository תקני של Kodi
+- יצירת `addons.xml` ו-`addons.xml.md5`
 
 ## v0.5
-- יצירת Build.zip
-
-## v0.6
-- יצירת Repository תקני
-
-## v0.7
-- Wizard בסיסי להתקנה מתוך Kodi
+- Wizard בסיסי להתקנת Build מתוך Kodi
 
 ## v1.0
-- מערכת מלאה: Build + Repository + Wizard + פרסום ל-GitHub Pages
+- מערכת מלאה: Build + Repository + Wizard + פרסום מסודר

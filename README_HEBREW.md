@@ -1,23 +1,21 @@
-# LiorKodiBuilder v0.9
+# LiorKodiBuilder v1.0
 
-גרסה זו מוסיפה Wizard אמיתי יותר:
+תיקון Wizard תקני לקודי:
+- ה-Wizard מוגדר כ-Program Add-on עם `xbmc.python.script`
+- נוצר `plugin.program.liorwizard-<version>.zip`
+- נוצר `repository.lior-<version>.zip`
+- נוצר `addons.xml` ו-`addons.xml.md5`
 
-- תפריט ראשי בתוך Kodi
-- התקנת Build מתוך `builds.json`
-- הצגת מידע גרסאות
-- ניקוי Cache / Packages
-- אייקון תקין ל־Repository ול־Wizard
-
-פקודה:
+פקודה מומלצת:
 
 ```cmd
-python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.2 --name "Lior Build"
+python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.3 --name "Lior Build"
 ```
 
-אחרי ההרצה מעלים את כל התוכן של:
+לאחר מכן להעלות את תוכן:
 
 ```text
 output\UPLOAD_TO_KODIBUILD_ROOT
 ```
 
-לתיקיית `KodiBuild`, ואז Commit + Push.
+למאגר `KodiBuild`.

@@ -166,9 +166,12 @@ def addon_xml_repo(base_url: str, repo_id: str, version: str) -> str:
     <import addon="xbmc.addon" version="12.0.0"/>
   </requires>
   <extension point="xbmc.addon.repository" name="Lior Repository">
-    <info compressed="false">{base_url}addons.xml</info>
-    <checksum>{base_url}addons.xml.md5</checksum>
-    <datadir zip="true">{base_url}repo/</datadir>
+    <dir minversion="21.0.0">
+      <info compressed="false">{base_url}addons.xml</info>
+      <checksum>{base_url}addons.xml.md5</checksum>
+      <datadir zip="true">{base_url}repo/</datadir>
+      <hashes>false</hashes>
+    </dir>
   </extension>
   <extension point="xbmc.addon.metadata">
     <summary lang="he_IL">מאגר פרטי של Lior Build</summary>
@@ -185,9 +188,7 @@ def addon_xml_wizard(wizard_id: str, version: str) -> str:
   <requires>
     <import addon="xbmc.python" version="3.0.0"/>
   </requires>
-  <extension point="xbmc.python.pluginsource" library="default.py">
-    <provides>executable</provides>
-  </extension>
+  <extension point="xbmc.python.script" library="default.py"/>
   <extension point="xbmc.addon.metadata">
     <summary lang="he_IL">אשף התקנת Lior Build</summary>
     <description lang="he_IL">מוריד ומתקין את Lior Build ממאגר GitHub.</description>

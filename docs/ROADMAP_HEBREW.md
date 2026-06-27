@@ -1,20 +1,23 @@
-# תוכנית עבודה
-
-## v0.1
-- סקריפט יצירת Build מקובץ Kodi.zip
-- ניקוי Cache ונתונים אישיים
-- יצירת repository.lior.zip
-- יצירת plugin.program.liorwizard.zip
-- יצירת addons.xml ו-md5
+# מפת דרכים
 
 ## v0.2
-- ממשק Windows פשוט
-- כפתור בחירת Kodi.zip
-- כפתור Build
+- בדיקת תיקיית Kodi
+- דוח בסיסי
 
 ## v0.3
-- פרסום אוטומטי ל-GitHub
-- גרסאות 1.0, 1.1, 1.2
+- ניקוי Cache, logs, packages, thumbnails
+
+## v0.4
+- הסרת חשבונות אישיים: Real-Debrid, Trakt, YouTube OAuth
+
+## v0.5
+- יצירת Build.zip
+
+## v0.6
+- יצירת Repository תקני
+
+## v0.7
+- Wizard בסיסי להתקנה מתוך Kodi
 
 ## v1.0
-- Wizard מלא עם גיבוי, שחזור, עדכון וניקוי
+- מערכת מלאה: Build + Repository + Wizard + פרסום ל-GitHub Pages

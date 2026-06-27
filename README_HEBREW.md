@@ -1,9 +1,8 @@
-# LiorKodiBuilder v1.2
+# LiorKodiBuilder v1.3
 
-תיקון Repository ל-Kodi 21:
-- שימוש ב-<dir minversion="21.0.0" maxversion="21.9.9">
-- הסרת <hashes> שגרמה בעיות תאימות
-- יצירת repository.lior.zip וגם repository.lior-<version>.zip בשורש האתר
+תיקון: מבנה datadir תקני של Kodi.
 
-הרצה:
-python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.5 --name "Lior Build"
+ה-ZIP של ה-Wizard נוצר עכשיו גם בנתיב:
+`repo/plugin.program.liorwizard/plugin.program.liorwizard-VERSION.zip`
+
+זה הנתיב שקודי ביקש לפי הלוג.

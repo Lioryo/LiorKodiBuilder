@@ -418,10 +418,15 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         write_binary(repo_addon_dir / "icon.png", ICON_PNG)
         repo_zip_name = f"{DEFAULT_REPO_ID}-{version}.zip"
         if not dry_run:
-            make_addon_zip(repo_addon_dir, repo_dir / repo_zip_name)
-            # Root copies make installation easier from Kodi File Manager.
-            shutil.copy2(repo_dir / repo_zip_name, upload / f"{DEFAULT_REPO_ID}.zip")
-            shutil.copy2(repo_dir / repo_zip_name, upload / repo_zip_name)
+            # Kodi repository <datadir> expects ZIPs under:
+            #   datadir/<addon_id>/<addon_id>-<version>.zip
+            repo_pkg_dir = repo_dir / DEFAULT_REPO_ID
+            repo_pkg_dir.mkdir(parents=True, exist_ok=True)
+            make_addon_zip(repo_addon_dir, repo_pkg_dir / repo_zip_name)
+            # Compatibility copies for direct browsing/install from File Manager.
+            shutil.copy2(repo_pkg_dir / repo_zip_name, repo_dir / repo_zip_name)
+            shutil.copy2(repo_pkg_dir / repo_zip_name, upload / f"{DEFAULT_REPO_ID}.zip")
+            shutil.copy2(repo_pkg_dir / repo_zip_name, upload / repo_zip_name)
 
         wiz_dir = work / DEFAULT_WIZARD_ID
         wiz_dir.mkdir()
@@ -430,7 +435,11 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         write_binary(wiz_dir / "icon.png", ICON_PNG)
         wiz_zip_name = f"{DEFAULT_WIZARD_ID}-{version}.zip"
         if not dry_run:
-            make_addon_zip(wiz_dir, repo_dir / wiz_zip_name)
+            wiz_pkg_dir = repo_dir / DEFAULT_WIZARD_ID
+            wiz_pkg_dir.mkdir(parents=True, exist_ok=True)
+            make_addon_zip(wiz_dir, wiz_pkg_dir / wiz_zip_name)
+            # Compatibility copy for manual browsing.
+            shutil.copy2(wiz_pkg_dir / wiz_zip_name, repo_dir / wiz_zip_name)
 
         builds_json = {
             "name": "Lior Kodi Builds",
@@ -463,7 +472,9 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
 <ul>
   <li><a href="{DEFAULT_REPO_ID}.zip">repository.lior.zip</a></li>
   <li><a href="repo/{repo_zip_name}">{repo_zip_name}</a></li>
+  <li><a href="repo/{DEFAULT_REPO_ID}/{repo_zip_name}">repo/{DEFAULT_REPO_ID}/{repo_zip_name}</a></li>
   <li><a href="repo/{wiz_zip_name}">{wiz_zip_name}</a></li>
+  <li><a href="repo/{DEFAULT_WIZARD_ID}/{wiz_zip_name}">repo/{DEFAULT_WIZARD_ID}/{wiz_zip_name}</a></li>
 </ul>
 <h2>קבצי עדכון</h2>
 <ul>
@@ -482,7 +493,9 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
 <h1>Lior Kodi Repo</h1>
 <ul>
   <li><a href="{repo_zip_name}">{repo_zip_name}</a></li>
+  <li><a href="{DEFAULT_REPO_ID}/{repo_zip_name}">{DEFAULT_REPO_ID}/{repo_zip_name}</a></li>
   <li><a href="{wiz_zip_name}">{wiz_zip_name}</a></li>
+  <li><a href="{DEFAULT_WIZARD_ID}/{wiz_zip_name}">{DEFAULT_WIZARD_ID}/{wiz_zip_name}</a></li>
 </ul>
 </html>'''
         write_text(repo_dir / "index.html", repo_index)
@@ -499,6 +512,8 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
 
 נוצרו:
 - {build_zip.relative_to(upload) if build_zip.exists() else 'build skipped'}
+- repo/{DEFAULT_REPO_ID}/{repo_zip_name}
+- repo/{DEFAULT_WIZARD_ID}/{wiz_zip_name}
 - repo/{repo_zip_name}
 - repo/{wiz_zip_name}
 - {DEFAULT_REPO_ID}.zip

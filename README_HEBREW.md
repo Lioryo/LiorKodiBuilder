@@ -1,11 +1,18 @@
-# LiorKodiBuilder v0.5
+# LiorKodiBuilder v0.6
 
-הרצה לדוגמה:
+גרסה זו מייצרת חבילת הפצה אמיתית יותר ל-KodiBuild:
 
-```bat
-python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0 --name "Lior Build" --base-url "https://lioryo.github.io/KodiBuild/"
+- Build ZIP מתוך גיבוי Kodi
+- repository.lior.zip להתקנה ידנית מתוך Kodi
+- plugin.program.liorwizard בתוך repo/
+- addons.xml + addons.xml.md5
+- builds.json
+- index.html
+
+פקודה לדוגמה:
+
+```cmd
+python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.0 --name "Lior Build"
 ```
 
-לאחר ההרצה מעלים ל-GitHub את התוכן של:
-
-`output\UPLOAD_TO_KODIBUILD_ROOT`
+את התוכן של `output\UPLOAD_TO_KODIBUILD_ROOT` מעלים לשורש המאגר KodiBuild.

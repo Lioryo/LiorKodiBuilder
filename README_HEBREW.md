@@ -1,23 +1,9 @@
-# LiorKodiBuilder v1.1
+# LiorKodiBuilder v1.2
 
-תיקון Repository ל-Kodi 21.x.
+תיקון Repository ל-Kodi 21:
+- שימוש ב-<dir minversion="21.0.0" maxversion="21.9.9">
+- הסרת <hashes> שגרמה בעיות תאימות
+- יצירת repository.lior.zip וגם repository.lior-<version>.zip בשורש האתר
 
-מה תוקן:
-- Repository addon.xml משתמש עכשיו בסכימת `<dir minversion="21.0.0">` החדשה.
-- Wizard מוגדר כ-Program Add-on תקני: `xbmc.python.script`.
-
-פקודת הרצה מומלצת:
-
-```cmd
-python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.4 --name "Lior Build"
-```
-
-לאחר מכן מעתיקים את תוכן:
-
-```text
-output\UPLOAD_TO_KODIBUILD_ROOT
-```
-
-לתיקיית המאגר `KodiBuild`, ואז Commit + Push.
-
-חשוב: בקודי מומלץ להסיר את `Lior Repository` הישן ולהתקין מחדש את `repository.lior-1.0.4.zip`.
+הרצה:
+python builder\build_release.py "C:\Users\daniel\Downloads\Kodi.zip" --version 1.0.5 --name "Lior Build"

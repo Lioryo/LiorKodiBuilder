@@ -166,11 +166,10 @@ def addon_xml_repo(base_url: str, repo_id: str, version: str) -> str:
     <import addon="xbmc.addon" version="12.0.0"/>
   </requires>
   <extension point="xbmc.addon.repository" name="Lior Repository">
-    <dir minversion="21.0.0">
+    <dir minversion="21.0.0" maxversion="21.9.9">
       <info compressed="false">{base_url}addons.xml</info>
       <checksum>{base_url}addons.xml.md5</checksum>
       <datadir zip="true">{base_url}repo/</datadir>
-      <hashes>false</hashes>
     </dir>
   </extension>
   <extension point="xbmc.addon.metadata">
@@ -420,7 +419,9 @@ def create_project(kodi_input: Path, out_root: Path, version: str, build_name: s
         repo_zip_name = f"{DEFAULT_REPO_ID}-{version}.zip"
         if not dry_run:
             make_addon_zip(repo_addon_dir, repo_dir / repo_zip_name)
+            # Root copies make installation easier from Kodi File Manager.
             shutil.copy2(repo_dir / repo_zip_name, upload / f"{DEFAULT_REPO_ID}.zip")
+            shutil.copy2(repo_dir / repo_zip_name, upload / repo_zip_name)
 
         wiz_dir = work / DEFAULT_WIZARD_ID
         wiz_dir.mkdir()

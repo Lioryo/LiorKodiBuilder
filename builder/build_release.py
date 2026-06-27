@@ -6,268 +6,276 @@ import json
 import os
 import re
 import shutil
-import sys
 import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
-OUTPUT_DIR = Path("output")
-DEFAULT_BUILD_NAME = "LiorBuild"
 DEFAULT_BASE_URL = "https://lioryo.github.io/KodiBuild/"
+DEFAULT_NAME = "Lior Build"
+DEFAULT_VERSION = "1.0"
 
-EXCLUDE_DIR_NAMES = {
-    "cache", "temp", "tmp", "packages", "thumbnails", "screenshots",
-    "cdm", "logs", "log", "crashlogs", "__pycache__",
+SKIP_DIR_NAMES = {
+    "cache", "temp", "tmp", "thumbnails", "packages", "archive_cache",
+    "__pycache__", ".git", ".github"
 }
-EXCLUDE_FILE_SUFFIXES = {
-    ".log", ".old", ".tmp", ".pyc", ".pyo", ".bak",
-}
-EXCLUDE_FILE_NAMES = {
-    "kodi.log", "kodi.old.log", "spmc.log", "xbmc.log", "textures13.db",
-}
-SENSITIVE_ADDON_PATTERNS = [
-    "realdebrid", "real-debrid", "real_debrid", "debrid", "premiumize", "alldebrid",
-    "trakt", "youtube", "accounts", "account", "oauth", "auth", "token",
-]
-SENSITIVE_KEY_PATTERNS = [
-    "token", "refresh", "oauth", "auth", "apikey", "api_key", "secret", "password",
-    "realdebrid", "real_debrid", "trakt", "premiumize", "alldebrid", "username",
+SKIP_FILE_SUFFIXES = {".log", ".old", ".bak", ".tmp", ".pyc", ".pyo"}
+SENSITIVE_PATTERNS = [
+    "realdebrid", "real-debrid", "real_debrid", "rd.auth", "rd_token",
+    "premiumize", "alldebrid", "trakt", "youtube", "oauth", "access_token",
+    "refresh_token", "client_secret", "password", "passwd", "cookie"
 ]
 
 
-def read_text_safe(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return ""
-
-
-def write_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def md5_file(path: Path) -> str:
-    h = hashlib.md5()
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
 
 
+def md5_text(text: str) -> str:
+    return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+def is_zip(path: Path) -> bool:
+    return path.is_file() and path.suffix.lower() == ".zip"
+
+
 def find_kodi_root(path: Path) -> Path:
-    path = path.resolve()
-    if (path / "addons").is_dir() and (path / "userdata").is_dir():
-        return path
-    for root, dirs, _files in os.walk(path):
-        root_path = Path(root)
-        if "addons" in dirs and "userdata" in dirs:
-            return root_path
-    raise SystemExit("לא נמצאה תיקיית Kodi תקינה. צריך תיקייה שמכילה addons וגם userdata.")
+    candidates = [path]
+    candidates.extend([p for p in path.rglob("*") if p.is_dir() and p.name.lower() in {"kodi", ".kodi"}][:20])
+    for c in candidates:
+        if (c / "addons").is_dir() and (c / "userdata").is_dir():
+            return c
+    raise SystemExit("לא נמצאה תיקיית Kodi תקינה. צריך תיקייה שיש בה addons וגם userdata.")
 
 
-def analyze(kodi_root: Path) -> dict[str, Any]:
-    addons_dir = kodi_root / "addons"
-    userdata_dir = kodi_root / "userdata"
-    addons = sorted([p.name for p in addons_dir.iterdir() if p.is_dir()]) if addons_dir.exists() else []
-    repos = [a for a in addons if a.startswith("repository.")]
-    plugins = [a for a in addons if a.startswith("plugin.")]
-    skins = [a for a in addons if a.startswith("skin.")]
-    gui_settings = read_text_safe(userdata_dir / "guisettings.xml")
-    current_skin = None
-    m = re.search(r'<setting[^>]+id="lookandfeel\.skin"[^>]*>(.*?)</setting>', gui_settings)
-    if m:
-        current_skin = m.group(1).strip()
-    total_files = sum(len(files) for _root, _dirs, files in os.walk(kodi_root))
-    return {
-        "kodi_root": str(kodi_root),
-        "total_files": total_files,
-        "addons_count": len(addons),
-        "repositories": repos,
-        "plugins": plugins,
-        "skins": skins,
-        "current_skin": current_skin,
-    }
+def extract_if_needed(input_path: Path, work: Path) -> Path:
+    if is_zip(input_path):
+        dest = work / "extracted"
+        dest.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(input_path, "r") as z:
+            z.extractall(dest)
+        return find_kodi_root(dest)
+    return find_kodi_root(input_path)
 
 
-def should_exclude(path: Path, kodi_root: Path) -> bool:
-    parts = {part.lower() for part in path.relative_to(kodi_root).parts}
-    name = path.name.lower()
-    if any(part in EXCLUDE_DIR_NAMES for part in parts):
+def should_skip(path: Path) -> bool:
+    parts = {p.lower() for p in path.parts}
+    if parts & SKIP_DIR_NAMES:
         return True
-    if name in EXCLUDE_FILE_NAMES:
-        return True
-    if any(name.endswith(suf) for suf in EXCLUDE_FILE_SUFFIXES):
+    if path.is_file() and path.suffix.lower() in SKIP_FILE_SUFFIXES:
         return True
     return False
 
 
-def copy_clean(kodi_root: Path, work_root: Path) -> dict[str, int]:
-    stats = {"copied": 0, "excluded": 0}
-    for root, dirs, files in os.walk(kodi_root):
-        root_path = Path(root)
-        # prune excluded dirs
-        keep_dirs = []
-        for d in dirs:
-            candidate = root_path / d
-            if should_exclude(candidate, kodi_root):
-                stats["excluded"] += 1
-            else:
-                keep_dirs.append(d)
-        dirs[:] = keep_dirs
-        for f in files:
-            src = root_path / f
-            if should_exclude(src, kodi_root):
-                stats["excluded"] += 1
-                continue
-            rel = src.relative_to(kodi_root)
-            dst = work_root / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
+def sanitize_text(data: str) -> str:
+    # מחיקה שמרנית של ערכי טוקנים/סיסמאות נפוצים בקבצי XML/JSON/TXT
+    data = re.sub(r"(?i)(access_token|refresh_token|token|password|passwd|client_secret|cookie)(['\"\s:=/>-]+)[^'\"<>,}\s]+", r"\1\2", data)
+    data = re.sub(r"(?i)<(access_token|refresh_token|token|password|passwd|client_secret|cookie)>.*?</\1>", r"<\1></\1>", data)
+    return data
+
+
+def copy_clean(src: Path, dst: Path) -> dict:
+    stats = {"copied": 0, "skipped": 0, "sanitized": 0}
+    for item in src.rglob("*"):
+        rel = item.relative_to(src)
+        target = dst / rel
+        if should_skip(item):
+            stats["skipped"] += 1
+            continue
+        if item.is_dir():
+            target.mkdir(parents=True, exist_ok=True)
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        name = item.name.lower()
+        rels = str(rel).lower()
+        sensitive = any(p in name or p in rels for p in SENSITIVE_PATTERNS)
+        if sensitive and item.suffix.lower() in {".xml", ".json", ".txt", ".ini", ".cfg"}:
             try:
-                shutil.copy2(src, dst)
-                stats["copied"] += 1
+                text = item.read_text(encoding="utf-8", errors="ignore")
+                target.write_text(sanitize_text(text), encoding="utf-8")
+                stats["sanitized"] += 1
             except Exception:
-                stats["excluded"] += 1
+                stats["skipped"] += 1
+                continue
+        else:
+            shutil.copy2(item, target)
+        stats["copied"] += 1
     return stats
 
 
-def scrub_text_file(path: Path) -> bool:
-    text = read_text_safe(path)
-    if not text:
-        return False
-    original = text
-    # simple XML/JSON/value redaction; conservative but practical
-    for key in SENSITIVE_KEY_PATTERNS:
-        text = re.sub(rf'(<setting[^>]+id="[^"]*{re.escape(key)}[^"]*"[^>]*>)(.*?)(</setting>)', rf'\1\3', text, flags=re.I | re.S)
-        text = re.sub(rf'("[^"]*{re.escape(key)}[^"]*"\s*:\s*")[^"]*(")', rf'\1\2', text, flags=re.I)
-        text = re.sub(rf'({re.escape(key)}\s*=\s*)[^\n\r&<]+', rf'\1', text, flags=re.I)
-    if text != original:
-        path.write_text(text, encoding="utf-8", errors="ignore")
-        return True
-    return False
+def zip_dir(src: Path, zip_path: Path) -> None:
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        for f in src.rglob("*"):
+            if f.is_file():
+                z.write(f, f.relative_to(src).as_posix())
 
 
-def scrub_personal_data(work_root: Path) -> dict[str, int]:
-    stats = {"removed_files": 0, "scrubbed_files": 0, "removed_dirs": 0}
-    addon_data = work_root / "userdata" / "addon_data"
-    if addon_data.exists():
-        for p in list(addon_data.iterdir()):
-            name = p.name.lower()
-            if any(pattern in name for pattern in SENSITIVE_ADDON_PATTERNS):
-                # Do not delete the entire addon_data folder for common video addons; instead scrub inside it.
-                for root, dirs, files in os.walk(p):
-                    for f in files:
-                        fp = Path(root) / f
-                        if fp.suffix.lower() in {".xml", ".json", ".txt", ".db"}:
-                            # db files may contain tokens; remove small account DBs by filename
-                            if fp.suffix.lower() == ".db" or any(x in fp.name.lower() for x in SENSITIVE_ADDON_PATTERNS):
-                                try:
-                                    fp.unlink()
-                                    stats["removed_files"] += 1
-                                except Exception:
-                                    pass
-                            elif scrub_text_file(fp):
-                                stats["scrubbed_files"] += 1
-            else:
-                for root, _dirs, files in os.walk(p):
-                    for f in files:
-                        fp = Path(root) / f
-                        if fp.suffix.lower() in {".xml", ".json", ".txt"} and scrub_text_file(fp):
-                            stats["scrubbed_files"] += 1
-    return stats
+def read_addon_xml(addon_dir: Path) -> str | None:
+    p = addon_dir / "addon.xml"
+    if p.is_file():
+        return p.read_text(encoding="utf-8", errors="ignore")
+    return None
 
 
-def make_zip(src_dir: Path, zip_path: Path) -> None:
-    zip_path.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        for root, _dirs, files in os.walk(src_dir):
-            for f in files:
-                src = Path(root) / f
-                arc = src.relative_to(src_dir).as_posix()
-                zf.write(src, arc)
+def create_wizard(site: Path, base_url: str, build_name: str) -> Path:
+    addon_id = "plugin.program.liorwizard"
+    d = site / "repo" / addon_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "addon.xml").write_text(f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="{addon_id}" name="Lior Wizard" version="1.0.0" provider-name="Lior">
+  <requires>
+    <import addon="xbmc.python" version="3.0.0"/>
+  </requires>
+  <extension point="xbmc.python.pluginsource" library="default.py">
+    <provides>executable</provides>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="he_IL">אשף התקנת {build_name}</summary>
+    <description lang="he_IL">מוריד ומתקין Build מקובץ ZIP.</description>
+    <platform>all</platform>
+  </extension>
+</addon>
+''', encoding="utf-8")
+    (d / "default.py").write_text(f'''# -*- coding: utf-8 -*-
+import os, shutil, zipfile, urllib.request
+import xbmc, xbmcgui, xbmcvfs
+
+BUILD_URL = "{base_url.rstrip('/')}/builds/LiorBuild-1.0.zip"
+BUILD_NAME = "{build_name}"
 
 
-def create_upload_package(build_zip: Path, upload_dir: Path, base_url: str, build_name: str, version: str, report: dict[str, Any]) -> None:
-    if upload_dir.exists():
-        shutil.rmtree(upload_dir)
-    (upload_dir / "builds").mkdir(parents=True, exist_ok=True)
-    dst_build = upload_dir / "builds" / build_zip.name
-    shutil.copy2(build_zip, dst_build)
-    size = dst_build.stat().st_size
-    checksum = md5_file(dst_build)
-    base_url = base_url.rstrip("/") + "/"
-    builds = {
-        "name": "Lior Kodi Builds",
-        "version": version,
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "builds": [
-            {
-                "name": build_name,
-                "version": version,
-                "kodi": "21.x",
-                "url": f"{base_url}builds/{build_zip.name}",
-                "size_bytes": size,
-                "md5": checksum,
-                "notes": "Friends version: personal Real-Debrid/Trakt/YouTube tokens removed where detected."
-            }
-        ]
-    }
-    write_json(upload_dir / "builds.json", builds)
-    write_json(upload_dir / "report.json", report)
-    (upload_dir / "index.html").write_text(f"""<!doctype html><html lang='he' dir='rtl'><meta charset='utf-8'>
-<title>Lior Kodi Build</title><body><h1>Lior Kodi Build</h1>
-<p>גרסה: {version}</p><p><a href='builds.json'>builds.json</a></p>
-<p><a href='builds/{build_zip.name}'>הורדת Build</a></p>
-</body></html>""", encoding="utf-8")
+def download(url, dest):
+    urllib.request.urlretrieve(url, dest)
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Create a clean Kodi build package")
-    parser.add_argument("kodi_path", help="Path to Kodi folder containing addons and userdata")
-    parser.add_argument("--version", default="1.0", help="Build version")
-    parser.add_argument("--name", default=DEFAULT_BUILD_NAME, help="Build name")
-    parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help="GitHub Pages base URL")
-    parser.add_argument("--dry-run", action="store_true", help="Analyze only")
-    args = parser.parse_args()
-
-    kodi_root = find_kodi_root(Path(args.kodi_path))
-    report: dict[str, Any] = {"generated_at": datetime.now().isoformat(timespec="seconds")}
-    report["analysis_before"] = analyze(kodi_root)
-
-    OUTPUT_DIR.mkdir(exist_ok=True)
-    write_json(OUTPUT_DIR / "analysis.json", report)
-
-    if args.dry_run:
-        print("בדיקה הסתיימה. נוצר output/analysis.json")
-        print(json.dumps(report["analysis_before"], ensure_ascii=False, indent=2))
+def main():
+    if not xbmcgui.Dialog().yesno("Lior Wizard", "להתקין את " + BUILD_NAME + "?", "הפעולה תחליף את הגדרות Kodi הקיימות."):
         return
+    profile = xbmcvfs.translatePath("special://home")
+    tmp = xbmcvfs.translatePath("special://temp/LiorBuild.zip")
+    xbmcgui.Dialog().notification("Lior Wizard", "מוריד Build...", xbmcgui.NOTIFICATION_INFO, 3000)
+    try:
+        download(BUILD_URL, tmp)
+        xbmcgui.Dialog().notification("Lior Wizard", "מחלץ Build...", xbmcgui.NOTIFICATION_INFO, 3000)
+        with zipfile.ZipFile(tmp, 'r') as z:
+            z.extractall(profile)
+        xbmcgui.Dialog().ok("Lior Wizard", "ההתקנה הסתיימה. סגור ופתח את Kodi מחדש.")
+    except Exception as e:
+        xbmcgui.Dialog().ok("שגיאה", str(e))
 
-    with tempfile.TemporaryDirectory(prefix="lior_kodi_build_") as td:
-        work_root = Path(td) / "kodi_clean"
-        copy_stats = copy_clean(kodi_root, work_root)
-        scrub_stats = scrub_personal_data(work_root)
-        report["copy_stats"] = copy_stats
-        report["scrub_stats"] = scrub_stats
-        report["analysis_after"] = analyze(work_root)
+if __name__ == "__main__":
+    main()
+''', encoding="utf-8")
+    zip_path = site / "repo" / f"{addon_id}-1.0.0.zip"
+    zip_dir(d, zip_path)
+    return d
 
-        safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", args.name).strip("_") or DEFAULT_BUILD_NAME
-        build_zip = OUTPUT_DIR / f"{safe_name}-{args.version}.zip"
-        if build_zip.exists():
-            build_zip.unlink()
-        make_zip(work_root, build_zip)
-        report["build_zip"] = str(build_zip)
-        report["build_zip_size_bytes"] = build_zip.stat().st_size
-        report["build_zip_md5"] = md5_file(build_zip)
 
-    upload_dir = OUTPUT_DIR / "UPLOAD_TO_KODIBUILD"
-    create_upload_package(build_zip, upload_dir, args.base_url, args.name, args.version, report)
-    write_json(OUTPUT_DIR / "report.json", report)
-    print("נוצר Build בהצלחה:", build_zip)
-    print("תיקיית העלאה:", upload_dir)
-    print("העלה ל-KodiBuild את התוכן של output/UPLOAD_TO_KODIBUILD")
+def create_repository(site: Path, base_url: str) -> Path:
+    addon_id = "repository.lior"
+    d = site / "repo" / addon_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "addon.xml").write_text(f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="{addon_id}" name="Lior Repository" version="1.0.0" provider-name="Lior">
+  <extension point="xbmc.addon.repository" name="Lior Repository">
+    <info compressed="false">{base_url.rstrip('/')}/addons.xml</info>
+    <checksum>{base_url.rstrip('/')}/addons.xml.md5</checksum>
+    <datadir zip="true">{base_url.rstrip('/')}/repo/</datadir>
+  </extension>
+  <extension point="xbmc.addon.metadata">
+    <summary lang="he_IL">מאגר Kodi של ליאור</summary>
+    <description lang="he_IL">Repository להתקנת Lior Wizard.</description>
+    <platform>all</platform>
+  </extension>
+</addon>
+''', encoding="utf-8")
+    zip_path = site / "repo" / f"{addon_id}-1.0.0.zip"
+    zip_dir(d, zip_path)
+    return d
 
+
+def create_addons_xml(site: Path) -> None:
+    addons = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', '<addons>']
+    for addon_xml in sorted((site / "repo").glob("*/addon.xml")):
+        content = addon_xml.read_text(encoding="utf-8", errors="ignore").strip()
+        content = re.sub(r"^<\?xml[^>]*>\s*", "", content)
+        addons.append(content)
+    addons.append('</addons>')
+    text = "\n".join(addons) + "\n"
+    (site / "addons.xml").write_text(text, encoding="utf-8")
+    (site / "addons.xml.md5").write_text(md5_text(text), encoding="utf-8")
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Lior Kodi Builder - create Kodi build package")
+    ap.add_argument("kodi_path", help="נתיב לתיקיית Kodi או לקובץ Kodi.zip")
+    ap.add_argument("--version", default=DEFAULT_VERSION)
+    ap.add_argument("--name", default=DEFAULT_NAME)
+    ap.add_argument("--base-url", default=DEFAULT_BASE_URL)
+    ap.add_argument("--dry-run", action="store_true")
+    args = ap.parse_args()
+
+    input_path = Path(args.kodi_path).expanduser().resolve()
+    if not input_path.exists():
+        raise SystemExit(f"הנתיב לא קיים: {input_path}")
+
+    out = Path("output").resolve()
+    if out.exists():
+        shutil.rmtree(out)
+    site = out / "UPLOAD_TO_KODIBUILD_ROOT"
+    builds = site / "builds"
+    repo = site / "repo"
+    builds.mkdir(parents=True, exist_ok=True)
+    repo.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as td:
+        work = Path(td)
+        kodi_root = extract_if_needed(input_path, work)
+        clean_root = work / "clean_kodi"
+        clean_root.mkdir()
+        stats = copy_clean(kodi_root, clean_root)
+
+        build_zip = builds / f"LiorBuild-{args.version}.zip"
+        if not args.dry_run:
+            zip_dir(clean_root, build_zip)
+        size = build_zip.stat().st_size if build_zip.exists() else 0
+
+    builds_json = {
+        "name": args.name,
+        "version": args.version,
+        "kodi": "21.x",
+        "url": f"{args.base_url.rstrip('/')}/builds/LiorBuild-{args.version}.zip",
+        "sha256": sha256_file(build_zip) if build_zip.exists() else "dry-run",
+        "size_bytes": size,
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "notes": "Friends build. Personal accounts/tokens sanitized where detected."
+    }
+    (site / "builds.json").write_text(json.dumps(builds_json, ensure_ascii=False, indent=2), encoding="utf-8")
+    (site / "index.html").write_text(f"""<!doctype html><html><head><meta charset='utf-8'><title>Lior Kodi Build</title></head>
+<body><h1>Lior Kodi Build</h1><p>Repository ZIP: <a href='repo/repository.lior-1.0.0.zip'>repository.lior-1.0.0.zip</a></p></body></html>""", encoding="utf-8")
+
+    create_wizard(site, args.base_url, args.name)
+    create_repository(site, args.base_url)
+    create_addons_xml(site)
+
+    report = {
+        "input": str(input_path),
+        "kodi_root_detected": True,
+        "copied_files": stats["copied"],
+        "skipped_items": stats["skipped"],
+        "sanitized_files": stats["sanitized"],
+        "output_folder": str(site),
+        "build_zip": str(build_zip),
+    }
+    (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    print("OK - נוצרה חבילת הפצה")
+    print("העלה ל-GitHub את התוכן של:")
+    print(site)
+    print(f"קבצים הועתקו: {stats['copied']}, דולגו: {stats['skipped']}, נוקו: {stats['sanitized']}")
 
 if __name__ == "__main__":
     main()

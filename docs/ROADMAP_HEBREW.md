@@ -1,18 +1,14 @@
 # מפת דרכים
 
-## v0.3 - נוכחי
-- ניקוי Build
-- הסרת מידע אישי נפוץ
-- יצירת Build.zip
-- יצירת builds.json
-- יצירת תיקיית העלאה ל-GitHub Pages
-
 ## v0.4
-- יצירת Repository תקני של Kodi
-- יצירת `addons.xml` ו-`addons.xml.md5`
+- סקריפט בנייה עובד
+- הפעלה דרך BAT
+- ניתוח תיקיית Kodi
+- ניקוי Cache/Logs/Thumbnails/Packages
+- הסרת מידע אישי נפוץ
+- יצירת Build ZIP
+- יצירת builds.json ו-index.html
 
-## v0.5
-- Wizard בסיסי להתקנת Build מתוך Kodi
-
-## v1.0
-- מערכת מלאה: Build + Repository + Wizard + פרסום מסודר
+## הבא
+- Repository ZIP תקני
+- Wizard בסיסי להתקנה מתוך Kodi
